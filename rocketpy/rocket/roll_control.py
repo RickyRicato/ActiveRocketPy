@@ -119,6 +119,7 @@ class RollControl:
             "name": self.name,
         }
 
+#
     @classmethod
     def from_dict(cls, data):
         return cls(
