@@ -307,6 +307,11 @@ class Motor(ABC):
         self.thrust = Function(
             thrust_source, "Time (s)", "Thrust (N)", self.interpolate, "zero"
         )
+        self.base_thrust = self.thrust
+        self.throttle = 1.0
+        def get_thrust(self, t):
+            throttle = max(0.0, min(1.0, self.throttle))
+            return self.base_thrust.get_value_opt(t) * throttle
 
         # Handle dry_mass input
         self.dry_mass = dry_mass
