@@ -12,6 +12,9 @@ from ..plots.motor_plots import _MotorPlots
 from ..prints.motor_prints import _MotorPrints
 from ..tools import parallel_axis_theorem_from_com, tuple_handler
 
+from scipy.integrate import cumulative_trapezoid
+from rocketpy.mathutils.function import Function
+
 
 # pylint: disable=too-many-public-methods
 class Motor(ABC):
@@ -1936,11 +1939,106 @@ class GenericMotor(Motor):
             }
         )
         return data
+    
+    def set_throttle_source(self, throttle_source=1.0, t_end=20.0, dt=0.002):
+        # keep original thrust curve
+        self.base_thrust = self.thrust
+        self.base_mass_flow_rate = self.mass_flow_rate
+        self.base_propellant_mass = self.propellant_mass
+        self.base_I_11 = self.I_11
+        self.base_I_22 = self.I_22
+        self.base_I_33 = self.I_33
+        self.base_burn_start_time = self.burn_start_time
+        self.base_burn_out_time = self.burn_out_time
+
+        # throttle source: callable / array / Function
+        self.throttle = Function(
+            throttle_source,
+            inputs="Time (s)",
+            outputs="Throttle (-)",
+            interpolation="linear",
+            extrapolation="constant",
+        )
+
+        # 建立 t -> tau 對應
+        t_grid = np.arange(0.0, t_end + dt, dt)
+        u_grid = np.clip(np.array([self.throttle.get_value_opt(t) for t in t_grid]), 0.0, 1.0)
+
+        tau_grid = cumulative_trapezoid(u_grid, t_grid, initial=0.0)
+        tau_grid = self.base_burn_start_time + tau_grid
+
+        # 不讓 tau 超過原本 burn out
+        tau_grid = np.minimum(tau_grid, self.base_burn_out_time)
+
+        self.motor_time_map = Function(
+            np.column_stack((t_grid, tau_grid)),
+            inputs="Time (s)",
+            outputs="Motor Burn Time (s)",
+            interpolation="linear",
+            extrapolation="constant",
+        )
+
+    def get_throttle(self, t):
+        return float(np.clip(self.throttle.get_value_opt(t), 0.0, 1.0))
+
+    def get_motor_time(self, t):
+        return float(
+            np.clip(
+                self.motor_time_map.get_value_opt(t),
+                self.base_burn_start_time,
+                self.base_burn_out_time,
+            )
+        )
+
+    def is_burning(self, t):
+        u = self.get_throttle(t)
+        tau = self.get_motor_time(t)
+        return (u > 0.0) and (tau < self.base_burn_out_time)
+
+    def get_thrust_at_time(self, t, pressure=None):
+        u = self.get_throttle(t)
+        tau = self.get_motor_time(t)
+        if u <= 0.0 or tau >= self.base_burn_out_time:
+            return 0.0
+
+        thrust = u * self.base_thrust.get_value_opt(tau)
+        if pressure is not None:
+            thrust += u * self.pressure_thrust(pressure)
+
+        return max(thrust, 0.0)
+
+    def get_mass_flow_rate_at_time(self, t):
+        u = self.get_throttle(t)
+        tau = self.get_motor_time(t)
+        if tau >= self.base_burn_out_time:
+            return 0.0
+        return u * self.base_mass_flow_rate.get_value_opt(tau)
+
+    def get_propellant_mass_at_time(self, t):
+        tau = self.get_motor_time(t)
+        return self.base_propellant_mass.get_value_opt(tau)
+
+    def get_I_11_at_time(self, t):
+        return self.base_I_11.get_value_opt(self.get_motor_time(t))
+
+    def get_I_33_at_time(self, t):
+        return self.base_I_33.get_value_opt(self.get_motor_time(t))
+
+    def get_I_11_dot_at_time(self, t):
+        u = self.get_throttle(t)
+        tau = self.get_motor_time(t)
+        return u * self.base_I_11.differentiate(tau, dx=1e-6)
+
+    def get_I_33_dot_at_time(self, t):
+        u = self.get_throttle(t)
+        tau = self.get_motor_time(t)
+        return u * self.base_I_33.differentiate(tau, dx=1e-6)
 
     @classmethod
     def from_dict(cls, data):
         return cls(
             thrust_source=data["thrust_source"],
+            throttle_source=data["throttle_source"],
             burn_time=data["burn_time"],
             chamber_radius=data["chamber_radius"],
             chamber_height=data["chamber_height"],

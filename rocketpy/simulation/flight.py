@@ -1400,7 +1400,7 @@ class Flight:
         # Calculate Forces
         pressure = self.env.pressure.get_value_opt(z)
         net_thrust = max(
-            self.rocket.motor.get_thrust(t)
+            self.rocket.motor.get_thrust_at_time(t, pressure)
             + self.rocket.motor.pressure_thrust(pressure),
             0,
         )
@@ -1480,7 +1480,7 @@ class Flight:
         # Thrust correction parameters
         pressure = self.env.pressure.get_value_opt(z)
         # Determine current behavior
-        if self.rocket.motor.burn_start_time < t < self.rocket.motor.burn_out_time:
+        if self.rocket.motor.is_burning(t):
             # Motor burning
             # Retrieve important motor quantities
             # Inertias
@@ -1497,7 +1497,7 @@ class Flight:
             propellant_mass_at_t = self.rocket.motor.propellant_mass.get_value_opt(t)
             # Thrust
             net_thrust = max(
-                self.rocket.motor.get_thrust(t)
+                self.rocket.motor.get_thrust_at_time(t, pressure)
                 + self.rocket.motor.pressure_thrust(pressure),
                 0,
             )
@@ -1870,10 +1870,10 @@ class Flight:
         speed_of_sound = self.env.speed_of_sound.get_value_opt(z)
         free_stream_mach = free_stream_speed / speed_of_sound
 
-        if self.rocket.motor.burn_start_time < t < self.rocket.motor.burn_out_time:
+        if self.rocket.motor.is_burning(t):
             pressure = self.env.pressure.get_value_opt(z)
             net_thrust = max(
-                self.rocket.motor.get_thrust(t)
+                self.rocket.motor.get_thrust_at_time(t, pressure)
                 + self.rocket.motor.pressure_thrust(pressure),
                 0,
             )

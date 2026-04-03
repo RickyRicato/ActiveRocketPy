@@ -217,6 +217,7 @@ class SolidMotor(Motor):
         interpolation_method="linear",
         coordinate_system_orientation="nozzle_to_combustion_chamber",
         reference_pressure=None,
+        throttle_source=1.0
     ):
         """Initialize Motor class, process thrust curve and geometrical
         parameters and store results.
@@ -331,7 +332,11 @@ class SolidMotor(Motor):
             interpolation_method=interpolation_method,
             coordinate_system_orientation=coordinate_system_orientation,
             reference_pressure=reference_pressure,
+            throttle_source=throttle_source,
         )
+        #throttle source
+        self.set_throttle_source(throttle_source=throttle_source)
+
         # Nozzle parameters
         self.throat_radius = throat_radius
         self.throat_area = np.pi * throat_radius**2
