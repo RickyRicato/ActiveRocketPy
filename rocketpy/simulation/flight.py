@@ -1977,7 +1977,8 @@ class Flight:
         M3 += self.rocket.cp_eccentricity_x * R2 - self.rocket.cp_eccentricity_y * R1
 
         # Throttle control
-        effective_thrust = nominal_thrust * throttle_control.throttle
+        throttle = self.rocket.throttle_control.throttle
+        effective_thrust = net_thrust * throttle
 
         # Roll control moment
         if hasattr(self.rocket, "roll_control"):
